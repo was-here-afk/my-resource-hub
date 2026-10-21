@@ -1,0 +1,57 @@
+name: Process resource submission
+
+# Adding the "approved" label to a submission issue publishes it.
+# Adding the "remove" label to an issue titled "Remove <id | title | url>" deletes it.
+# Only people with write access to the repo can add labels, so only you can trigger this.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+
+# Run one at a time so two quick approvals don't clash on resources.json
+concurrency:
+  group: resources-json
+  cancel-in-progress: false
+
+jobs:
+  process:
+    if: >-
+      (github.event.label.name == 'approved' && contains(github.event.issue.labels.*.name, 'submission')) ||
+      github.event.label.name == 'remove'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Update resources.json
+        id: update
+        env:
+          # Issue text is untrusted, so it is passed as env vars and never pasted into a shell command
+          ACTION: ${{ github.event.label.name == 'approved' && 'approve' || 'remove' }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node .github/scripts/process-issue.js
+
+      - name: Commit and push
+        if: steps.update.outputs.status == 'ok'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add resources.json
+          git commit -m "Update resources via issue #${{ github.event.issue.number }}"
+          git push
+
+      - name: Comment on issue and close it
+        if: steps.update.outputs.status == 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --comment "$(cat result.md)"
+
+      - name: Comment on issue if something went wrong
+        if: steps.update.outputs.status != 'ok'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue comment ${{ github.event.issue.number }} --repo "$GITHUB_REPOSITORY" --body "Could not process this issue: $(cat result.md)"
