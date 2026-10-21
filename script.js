@@ -1,30 +1,9 @@
-// Sample Placeholder Data (Add your real resources here anytime!)
-let resources = [
-  {
-    id: 1,
-    title: "Official Python Documentation",
-    category: "Python",
-    type: "link",
-    description: "Comprehensive language reference, standard libraries, and official guides for Python developers.",
-    url: "https://docs.python.org/3/"
-  },
-  {
-    id: 2,
-    title: "Useful Git Commands",
-    category: "Tools",
-    type: "code",
-    description: "Quick reference snippet for creating and pushing a new feature branch.",
-    code: "git checkout -b feature/my-branch\ngit add .\ngit commit -m 'Add new feature'\ngit push origin feature/my-branch"
-  },
-  {
-    id: 3,
-    title: "Flexbox Froggy",
-    category: "Web Dev",
-    type: "link",
-    description: "A fun interactive game to learn CSS Flexbox alignment and layout rules easily.",
-    url: "https://flexboxfroggy.com/"
-  }
-];
+// ===== Config =====
+// Your GitHub repo, where visitor submissions arrive as Issues
+const REPO = 'was-here-afk/my-resource-hub';
+
+// Resources are loaded from resources.json (edit that file to add resources permanently)
+let resources = [];
 
 let activeCategory = "All";
 let searchQuery = "";
@@ -40,10 +19,21 @@ const statCategories = document.getElementById('statCategories');
 const currentCategoryTitle = document.getElementById('currentCategoryTitle');
 
 // Initialize App
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadResources();
   renderApp();
-  setupEventListeners();
 });
+
+async function loadResources() {
+  try {
+    const res = await fetch('resources.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    resources = await res.json();
+  } catch (err) {
+    console.error('Could not load resources.json', err);
+    resources = [];
+  }
+}
 
 function renderApp() {
   renderSidebar();
@@ -53,18 +43,35 @@ function renderApp() {
 }
 
 function getCategories() {
-  const cats = ['All', ...new Set(resources.map(r => r.category))];
-  return cats;
+  return ['All', ...new Set(resources.map(r => r.category))];
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Only allow http(s) links so nobody can sneak in javascript: URLs
+function safeUrl(url) {
+  try {
+    const u = new URL(url);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function renderSidebar() {
-  const categories = getCategories();
-  sidebarNav.innerHTML = categories.map(cat => {
+  sidebarNav.innerHTML = getCategories().map(cat => {
     const count = cat === 'All' ? resources.length : resources.filter(r => r.category === cat).length;
     const activeClass = cat === activeCategory ? 'active' : '';
     return `
-      <div class="nav-item ${activeClass}" onclick="setCategory('${cat}')">
-        <span>${cat}</span>
+      <div class="nav-item ${activeClass}" data-cat="${escapeHtml(cat)}">
+        <span>${escapeHtml(cat)}</span>
         <span class="item-count">${count}</span>
       </div>
     `;
@@ -72,10 +79,9 @@ function renderSidebar() {
 }
 
 function renderTags() {
-  const categories = getCategories();
-  tagContainer.innerHTML = categories.map(cat => `
-    <button class="tag-btn ${cat === activeCategory ? 'active' : ''}" onclick="setCategory('${cat}')">
-      ${cat}
+  tagContainer.innerHTML = getCategories().map(cat => `
+    <button class="tag-btn ${cat === activeCategory ? 'active' : ''}" data-cat="${escapeHtml(cat)}">
+      ${escapeHtml(cat)}
     </button>
   `).join('');
 }
@@ -89,8 +95,8 @@ function renderResources() {
 
   if (searchQuery.trim() !== '') {
     const q = searchQuery.toLowerCase();
-    filtered = filtered.filter(r => 
-      r.title.toLowerCase().includes(q) || 
+    filtered = filtered.filter(r =>
+      r.title.toLowerCase().includes(q) ||
       r.description.toLowerCase().includes(q) ||
       r.category.toLowerCase().includes(q)
     );
@@ -101,34 +107,37 @@ function renderResources() {
   if (filtered.length === 0) {
     resourceGrid.classList.add('hidden');
     emptyState.classList.remove('hidden');
+    return;
+  }
 
-  } else {
-    resourceGrid.classList.remove('hidden');
-    emptyState.classList.add('hidden');
+  resourceGrid.classList.remove('hidden');
+  emptyState.classList.add('hidden');
 
-    resourceGrid.innerHTML = filtered.map(r => `
+  resourceGrid.innerHTML = filtered.map(r => {
+    const link = r.url ? safeUrl(r.url) : null;
+    return `
       <div class="card">
         <div>
           <div class="card-top">
-            <span class="card-badge">${r.category}</span>
+            <span class="card-badge">${escapeHtml(r.category)}</span>
           </div>
-          <h3 class="card-title">${r.title}</h3>
-          <p class="card-desc">${r.description}</p>
+          <h3 class="card-title">${escapeHtml(r.title)}</h3>
+          <p class="card-desc">${escapeHtml(r.description)}</p>
         </div>
 
-        ${r.type === 'code' ? `
+        ${r.type === 'code' && r.code ? `
           <div class="code-block">
-            <button class="copy-btn" onclick="copyCode(this, \`${r.code.replace(/`/g, '\\`')}\`)">Copy</button>
+            <button class="copy-btn" data-id="${r.id}">Copy</button>
             <pre><code>${escapeHtml(r.code)}</code></pre>
           </div>
         ` : ''}
 
-        ${r.url ? `
-          <a href="${r.url}" target="_blank" class="card-action">Visit Resource &rarr;</a>
+        ${link ? `
+          <a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" class="card-action">Visit Resource &rarr;</a>
         ` : ''}
       </div>
-    `).join('');
-  }
+    `;
+  }).join('');
 }
 
 function updateStats() {
@@ -141,22 +150,37 @@ function setCategory(cat) {
   renderApp();
 }
 
+// Category clicks (sidebar + tag bar)
+[sidebarNav, tagContainer].forEach(el => {
+  el.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-cat]');
+    if (target) setCategory(target.dataset.cat);
+  });
+});
+
+// Copy button clicks
+resourceGrid.addEventListener('click', (e) => {
+  const btn = e.target.closest('.copy-btn');
+  if (!btn) return;
+  const item = resources.find(r => String(r.id) === btn.dataset.id);
+  if (!item) return;
+  navigator.clipboard.writeText(item.code);
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy', 2000);
+});
+
 // Search Handler
 searchInput.addEventListener('input', (e) => {
   searchQuery = e.target.value;
   renderResources();
 });
 
-// Copy Code Utility
-function copyCode(btn, codeText) {
-  navigator.clipboard.writeText(codeText);
-  btn.textContent = 'Copied!';
-  setTimeout(() => btn.textContent = 'Copy', 2000);
-}
-
-function escapeHtml(str) {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
+document.getElementById('clearFiltersBtn').addEventListener('click', () => {
+  activeCategory = 'All';
+  searchQuery = '';
+  searchInput.value = '';
+  renderApp();
+});
 
 // Theme Switcher
 const themeToggle = document.getElementById('themeToggle');
@@ -208,21 +232,42 @@ resTypeSelect.addEventListener('change', (e) => {
 function closeModal() {
   modalBackdrop.classList.add('hidden');
   addResourceForm.reset();
+  codeGroup.classList.add('hidden');
+  urlGroup.classList.remove('hidden');
 }
 
+// Submitting sends the resource to you as a pre-filled GitHub Issue
 addResourceForm.addEventListener('submit', (e) => {
   e.preventDefault();
-  const newRes = {
-    id: Date.now(),
-    title: document.getElementById('resTitle').value,
-    category: document.getElementById('resCategory').value,
+
+  const submission = {
+    title: document.getElementById('resTitle').value.trim(),
+    category: document.getElementById('resCategory').value.trim(),
     type: document.getElementById('resType').value,
-    description: document.getElementById('resDesc').value,
-    url: document.getElementById('resUrl').value || null,
+    description: document.getElementById('resDesc').value.trim(),
+    url: document.getElementById('resUrl').value.trim() || null,
     code: document.getElementById('resCode').value || null
   };
 
-  resources.unshift(newRes);
+  if (submission.url && !safeUrl(submission.url)) {
+    alert('Please enter a valid http(s) URL.');
+    return;
+  }
+
+  const json = JSON.stringify(submission, null, 2);
+  const issueTitle = encodeURIComponent(`Resource submission: ${submission.title}`);
+  const issueBody = encodeURIComponent(
+    `**New resource submission**\n\n\`\`\`json\n${json}\n\`\`\`\n`
+  );
+  const issueUrl = `https://github.com/${REPO}/issues/new?labels=submission&title=${issueTitle}&body=${issueBody}`;
+
+  // GitHub rejects very long URLs, so warn instead of failing silently
+  if (issueUrl.length > 7500) {
+    alert('This submission is too long to send. Please shorten the code snippet or description.');
+    return;
+  }
+
+  window.open(issueUrl, '_blank', 'noopener');
   closeModal();
-  renderApp();
+  alert('Thanks! GitHub will open in a new tab. Click "Submit new issue" there to send it for review.');
 });
