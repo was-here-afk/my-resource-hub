@@ -18,9 +18,9 @@ concurrency:
 
 jobs:
   process:
-    if: >-
-      (github.event.label.name == 'approved' && contains(github.event.issue.labels.*.name, 'submission')) ||
-      github.event.label.name == 'remove'
+    # Visitors can't add labels to their own issues, so we don't require a "submission" label.
+    # Only you can add "approved" or "remove", and the script rejects issues without a valid JSON block.
+    if: github.event.label.name == 'approved' || github.event.label.name == 'remove'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
