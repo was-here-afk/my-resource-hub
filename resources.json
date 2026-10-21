@@ -16,14 +16,6 @@
     "url": "https://docs.python.org/3/"
   },
   {
-    "id": 2,
-    "title": "Useful Git Commands",
-    "category": "Tools",
-    "type": "code",
-    "description": "Quick reference snippet for creating and pushing a new feature branch.",
-    "code": "git checkout -b feature/my-branch\ngit add .\ngit commit -m 'Add new feature'\ngit push origin feature/my-branch"
-  },
-  {
     "id": 3,
     "title": "Flexbox Froggy",
     "category": "Web Dev",
