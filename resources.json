@@ -1,5 +1,13 @@
 [
   {
+    "id": 4,
+    "title": "How to Use Ai Effectively",
+    "category": "Tools",
+    "type": "link",
+    "description": "Article on how to use ai effectively for students.",
+    "url": "https://ctl.stanford.edu/aimes/ai-learning-guide-students"
+  },
+  {
     "id": 1,
     "title": "Official Python Documentation",
     "category": "Python",
